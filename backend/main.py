@@ -1,5 +1,7 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List
 import openai
@@ -100,7 +102,7 @@ def semantic_search(query: str, documents: dict, top_k: int = 5) -> List[dict]:
 # -----------------------------
 # 🚀 API Routes
 # -----------------------------
-@app.get("/")
+@app.get("/api")
 async def root():
     return {"message": "Enterprise Knowledge Assistant API (OpenAI)", "status": "running"}
 
@@ -284,6 +286,24 @@ async def health_check():
         "documents_count": len(documents_db),
         "total_queries": analytics_db["total_queries"]
     }
+
+
+# Serve static files (frontend) if build directory exists
+static_dir = os.path.join(os.path.dirname(__file__), "..", "frontend", "build")
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=os.path.join(static_dir, "static")), name="static")
+    
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        """Serve the React frontend."""
+        # API routes should not be caught here
+        if full_path.startswith(("api", "upload", "query", "summarize", "documents", "analytics", "health")):
+            raise HTTPException(status_code=404, detail="Not found")
+        
+        file_path = os.path.join(static_dir, full_path)
+        if os.path.exists(file_path) and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        return FileResponse(os.path.join(static_dir, "index.html"))
 
 
 if __name__ == "__main__":
