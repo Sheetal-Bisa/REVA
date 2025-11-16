@@ -1,14 +1,8 @@
 [phases.setup]
-nixPkgs = ["python310", "nodejs-18_x"]
-
-[phases.install]
-cmds = [
-  "pip install -r requirements.txt",
-  "cd frontend && npm install --legacy-peer-deps && cd .."
-]
+nixPkgs = ["nodejs-18_x"]
 
 [phases.build]
-cmds = ["cd frontend && npm run build && cd .."]
+cmds = ["cd frontend && npm install --legacy-peer-deps && npm run build && cd .."]
 
 [start]
 cmd = "cd backend && python -m uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1"
