@@ -14,6 +14,25 @@ load_dotenv()
 # Initialize FastAPI app
 app = FastAPI(title="Enterprise Knowledge Assistant API")
 
+@app.on_event("startup")
+async def startup_event():
+    """Log startup information."""
+    openai_api_key = os.environ.get("OPENAI_API_KEY")
+    print("=" * 50)
+    print("Application Startup")
+    print("=" * 50)
+    if openai_api_key:
+        print(f"✓ OPENAI_API_KEY found (length: {len(openai_api_key)}, starts with: {openai_api_key[:10]}...)")
+    else:
+        print("✗ OPENAI_API_KEY not found in environment variables")
+        print(f"Available env vars: {[k for k in os.environ.keys() if 'OPENAI' in k.upper() or 'API' in k.upper()]}")
+    
+    if client:
+        print("✓ OpenAI client initialized successfully")
+    else:
+        print("✗ OpenAI client not initialized")
+    print("=" * 50)
+
 # Configure CORS (allow your React frontend to connect)
 allowed_origins = os.environ.get("ALLOWED_ORIGINS", "*").split(",")
 app.add_middleware(
@@ -25,18 +44,33 @@ app.add_middleware(
 )
 
 # Initialize OpenAI client
-openai_api_key = os.environ.get("OPENAI_API_KEY")
-
-# Create OpenAI client instance (v1.x API) - only if API key is available
-client = None
-if openai_api_key:
+def get_openai_client():
+    """Get or create OpenAI client instance."""
+    openai_api_key = os.environ.get("OPENAI_API_KEY")
+    
+    if not openai_api_key:
+        print("ERROR: OPENAI_API_KEY environment variable not found!")
+        print(f"Available env vars: {list(os.environ.keys())}")
+        return None
+    
+    # Check if key is not empty
+    if not openai_api_key.strip():
+        print("ERROR: OPENAI_API_KEY is empty!")
+        return None
+    
     try:
-        client = openai.OpenAI(api_key=openai_api_key)
+        client = openai.OpenAI(api_key=openai_api_key.strip())
+        # Test the client by making a simple validation
+        print(f"OpenAI client initialized successfully. API key starts with: {openai_api_key[:10]}...")
+        return client
     except Exception as e:
-        print(f"Warning: Failed to initialize OpenAI client: {e}")
-        client = None
-else:
-    print("Warning: OPENAI_API_KEY not found. OpenAI features will not work.")
+        print(f"ERROR: Failed to initialize OpenAI client: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+# Create OpenAI client instance (v1.x API)
+client = get_openai_client()
 
 # In-memory storage (temporary; can be replaced by DB later)
 documents_db = {}
@@ -197,12 +231,16 @@ async def query_documents(request: QueryRequest):
 If the answer cannot be found in the context, say so clearly. Always cite which document your answer comes from.{language_instruction}
 If no relevant information is found, politely inform the user that the information is not available in the uploaded documents."""
         
-        # Check if OpenAI client is available
+        # Check if OpenAI client is available, try to reinitialize if needed
         if not client:
-            raise HTTPException(
-                status_code=500, 
-                detail="OpenAI API key not configured. Please set OPENAI_API_KEY environment variable."
-            )
+            # Try to reinitialize the client
+            global client
+            client = get_openai_client()
+            if not client:
+                raise HTTPException(
+                    status_code=500, 
+                    detail="OpenAI API key not configured. Please set OPENAI_API_KEY environment variable in Railway."
+                )
         
         # Call OpenAI API
         try:
@@ -276,12 +314,16 @@ async def summarize_document(request: SummaryRequest):
         raise HTTPException(status_code=404, detail="Document not found.")
     
     try:
-        # Check if OpenAI client is available
+        # Check if OpenAI client is available, try to reinitialize if needed
         if not client:
-            raise HTTPException(
-                status_code=500, 
-                detail="OpenAI API key not configured. Please set OPENAI_API_KEY environment variable."
-            )
+            # Try to reinitialize the client
+            global client
+            client = get_openai_client()
+            if not client:
+                raise HTTPException(
+                    status_code=500, 
+                    detail="OpenAI API key not configured. Please set OPENAI_API_KEY environment variable in Railway."
+                )
         
         doc = documents_db[request.document_id]
         content = doc["content"][:8000]  # limit content length
@@ -350,10 +392,18 @@ async def get_analytics():
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
+    openai_api_key = os.environ.get("OPENAI_API_KEY")
+    client_status = "configured" if client else "not configured"
+    api_key_present = "yes" if openai_api_key else "no"
+    api_key_preview = openai_api_key[:10] + "..." if openai_api_key and len(openai_api_key) > 10 else "not set"
+    
     return {
         "status": "healthy",
         "documents_count": len(documents_db),
-        "total_queries": analytics_db["total_queries"]
+        "total_queries": analytics_db["total_queries"],
+        "openai_client": client_status,
+        "openai_api_key_present": api_key_present,
+        "openai_api_key_preview": api_key_preview
     }
 
 
