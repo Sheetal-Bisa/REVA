@@ -285,14 +285,26 @@ If no relevant information is found, politely inform the user that the informati
             if not client:
                 # Last attempt - check all env vars and provide detailed error
                 all_vars = dict(os.environ)
-                openai_related = {k: v[:20] + "..." if len(v) > 20 else v for k, v in all_vars.items() if 'OPENAI' in k.upper() or 'API' in k.upper()}
+                openai_related = {}
+                for k, v in all_vars.items():
+                    if 'OPENAI' in k.upper() or 'API' in k.upper():
+                        # Show key name and value length, but not the actual value for security
+                        openai_related[k] = f"length:{len(v)}, starts_with:{v[:5] if len(v) > 5 else 'empty'}"
+                
                 print(f"Failed to initialize client. OpenAI-related env vars: {openai_related}")
                 print(f"Total env vars: {len(all_vars)}")
                 
-                raise HTTPException(
-                    status_code=500, 
-                    detail=f"OpenAI API key not found. Checked for OPENAI_API_KEY. Found {len(openai_related)} related variables: {list(openai_related.keys())}. Please verify the variable is set correctly in Railway and restart the service."
-                )
+                # Check if the key exists but is empty
+                key_value = os.environ.get("OPENAI_API_KEY", "")
+                if "OPENAI_API_KEY" in all_vars:
+                    if not key_value or not key_value.strip():
+                        error_msg = f"OPENAI_API_KEY exists but is EMPTY. Please set a valid API key value in Railway Variables."
+                    else:
+                        error_msg = f"OPENAI_API_KEY found (length: {len(key_value)}) but client initialization failed. Check Railway logs for details. The key might be invalid or there's a connection issue."
+                else:
+                    error_msg = f"OPENAI_API_KEY not found. Found {len(openai_related)} related variables: {list(openai_related.keys())}. Please add OPENAI_API_KEY in Railway Variables."
+                
+                raise HTTPException(status_code=500, detail=error_msg)
         
         # Call OpenAI API
         try:
