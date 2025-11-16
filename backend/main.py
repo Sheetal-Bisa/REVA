@@ -58,8 +58,15 @@ def get_openai_client() -> Optional[openai.OpenAI]:
         client_instance = openai.OpenAI(api_key=openai_api_key)
         print(f"✓ OpenAI client initialized successfully. API key starts with: {openai_api_key[:10]}...")
         return client_instance
+    except openai.OpenAIError as e:
+        print(f"ERROR: OpenAI API error during client initialization: {e}")
+        print(f"Error type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
+        return None
     except Exception as e:
         print(f"ERROR: Failed to initialize OpenAI client: {e}")
+        print(f"Error type: {type(e).__name__}")
         import traceback
         traceback.print_exc()
         return None
@@ -280,7 +287,12 @@ If no relevant information is found, politely inform the user that the informati
             
             if openai_api_key:
                 print(f"Found API key in /query handler, length: {len(openai_api_key)}, starts with: {openai_api_key[:10]}")
+                print(f"API key preview: {openai_api_key[:20]}...{openai_api_key[-10:]}")
                 client = get_openai_client()
+                if client:
+                    print("✓ Client successfully initialized in /query handler")
+                else:
+                    print("✗ Client initialization failed in /query handler - check logs above for error details")
             
             if not client:
                 # Last attempt - check all env vars and provide detailed error
@@ -300,7 +312,14 @@ If no relevant information is found, politely inform the user that the informati
                     if not key_value or not key_value.strip():
                         error_msg = f"OPENAI_API_KEY exists but is EMPTY. Please set a valid API key value in Railway Variables."
                     else:
-                        error_msg = f"OPENAI_API_KEY found (length: {len(key_value)}) but client initialization failed. Check Railway logs for details. The key might be invalid or there's a connection issue."
+                        # Try to initialize one more time to get the actual error
+                        try:
+                            test_client = openai.OpenAI(api_key=key_value.strip())
+                            error_msg = f"Client initialization succeeded but client is None. This is unexpected. Please check Railway logs."
+                        except Exception as init_error:
+                            error_msg = f"OPENAI_API_KEY found (length: {len(key_value)}) but client initialization failed: {str(init_error)}. Please verify the API key is valid and has proper permissions."
+                        else:
+                            error_msg = f"OPENAI_API_KEY found (length: {len(key_value)}) but client initialization failed. Check Railway deployment logs for the detailed error message."
                 else:
                     error_msg = f"OPENAI_API_KEY not found. Found {len(openai_related)} related variables: {list(openai_related.keys())}. Please add OPENAI_API_KEY in Railway Variables."
                 
