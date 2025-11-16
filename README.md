@@ -47,6 +47,8 @@ A sophisticated enterprise RAG (Retrieval-Augmented Generation) chatbot with a c
 - Node.js 16 or higher
 - OpenAI API Key
 
+### Quick Start (Local Development)
+
 ### Backend Setup
 
 1. **Navigate to backend directory:**
@@ -179,8 +181,36 @@ Contributions are welcome! Please ensure your code follows the existing design p
 
 This project is for educational and enterprise use.
 
+## Railway Deployment
+
+REVA is ready for deployment on Railway! 
+
+### Quick Deploy
+
+1. Push your code to GitHub
+2. Go to [Railway](https://railway.app/new)
+3. Deploy from your GitHub repository
+4. Add environment variable: `OPENAI_API_KEY`
+5. Railway will automatically detect and deploy using the included configuration
+
+### Detailed Instructions
+
+- See [RAILWAY_DEPLOYMENT.md](RAILWAY_DEPLOYMENT.md) for complete deployment guide
+- See [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) for step-by-step checklist
+- Run `railway-setup.bat` (Windows) or `railway-setup.sh` (Mac/Linux) for interactive setup
+
+### Configuration Files
+
+The following files are configured for Railway deployment:
+- `railway.json` - Railway project configuration
+- `nixpacks.toml` - Build configuration
+- `Procfile` - Start command
+- `runtime.txt` - Python version
+- `.railwayignore` - Files to exclude from deployment
+
 ## Acknowledgments
 
 - Design inspired by Jony Ive's minimalist principles
 - Powered by OpenAI's GPT-4
 - Built with modern web technologies
+- Deployment optimized for Railway

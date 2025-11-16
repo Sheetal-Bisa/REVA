@@ -1,0 +1,24 @@
+# Frontend files (if deploying backend only)
+frontend/node_modules/
+frontend/build/
+frontend/.env
+
+# Backend files
+backend/__pycache__/
+backend/venv/
+backend/.env
+backend/uploads/
+
+# Git and IDE
+.git/
+.vscode/
+.idea/
+
+# Documentation
+*.md
+!RAILWAY_DEPLOYMENT.md
+
+# Environment files
+.env
+.env.local
+.env.*.local
