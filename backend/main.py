@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 import openai
 import os
 from datetime import datetime
@@ -13,25 +13,6 @@ load_dotenv()
 
 # Initialize FastAPI app
 app = FastAPI(title="Enterprise Knowledge Assistant API")
-
-@app.on_event("startup")
-async def startup_event():
-    """Log startup information."""
-    openai_api_key = os.environ.get("OPENAI_API_KEY")
-    print("=" * 50)
-    print("Application Startup")
-    print("=" * 50)
-    if openai_api_key:
-        print(f"✓ OPENAI_API_KEY found (length: {len(openai_api_key)}, starts with: {openai_api_key[:10]}...)")
-    else:
-        print("✗ OPENAI_API_KEY not found in environment variables")
-        print(f"Available env vars: {[k for k in os.environ.keys() if 'OPENAI' in k.upper() or 'API' in k.upper()]}")
-    
-    if client:
-        print("✓ OpenAI client initialized successfully")
-    else:
-        print("✗ OpenAI client not initialized")
-    print("=" * 50)
 
 # Configure CORS (allow your React frontend to connect)
 allowed_origins = os.environ.get("ALLOWED_ORIGINS", "*").split(",")
@@ -43,14 +24,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Global OpenAI client
+client: Optional[openai.OpenAI] = None
+
 # Initialize OpenAI client
-def get_openai_client():
+def get_openai_client() -> Optional[openai.OpenAI]:
     """Get or create OpenAI client instance."""
     openai_api_key = os.environ.get("OPENAI_API_KEY")
     
     if not openai_api_key:
         print("ERROR: OPENAI_API_KEY environment variable not found!")
-        print(f"Available env vars: {list(os.environ.keys())}")
         return None
     
     # Check if key is not empty
@@ -59,18 +42,37 @@ def get_openai_client():
         return None
     
     try:
-        client = openai.OpenAI(api_key=openai_api_key.strip())
-        # Test the client by making a simple validation
+        client_instance = openai.OpenAI(api_key=openai_api_key.strip())
         print(f"OpenAI client initialized successfully. API key starts with: {openai_api_key[:10]}...")
-        return client
+        return client_instance
     except Exception as e:
         print(f"ERROR: Failed to initialize OpenAI client: {e}")
         import traceback
         traceback.print_exc()
         return None
 
-# Create OpenAI client instance (v1.x API)
-client = get_openai_client()
+@app.on_event("startup")
+async def startup_event():
+    """Log startup information and initialize OpenAI client."""
+    global client
+    openai_api_key = os.environ.get("OPENAI_API_KEY")
+    print("=" * 50)
+    print("Application Startup")
+    print("=" * 50)
+    if openai_api_key:
+        print(f"✓ OPENAI_API_KEY found (length: {len(openai_api_key)}, starts with: {openai_api_key[:10]}...)")
+    else:
+        print("✗ OPENAI_API_KEY not found in environment variables")
+        print(f"Available env vars: {[k for k in os.environ.keys() if 'OPENAI' in k.upper() or 'API' in k.upper()]}")
+    
+    # Initialize client
+    client = get_openai_client()
+    
+    if client:
+        print("✓ OpenAI client initialized successfully")
+    else:
+        print("✗ OpenAI client not initialized")
+    print("=" * 50)
 
 # In-memory storage (temporary; can be replaced by DB later)
 documents_db = {}
@@ -190,6 +192,7 @@ async def upload_document(file: UploadFile = File(...)):
 @app.post("/query", response_model=QueryResponse)
 async def query_documents(request: QueryRequest):
     """Query the uploaded documents."""
+    global client
     start_time = datetime.now()
     
     if not documents_db:
@@ -233,8 +236,6 @@ If no relevant information is found, politely inform the user that the informati
         
         # Check if OpenAI client is available, try to reinitialize if needed
         if not client:
-            # Try to reinitialize the client
-            global client
             client = get_openai_client()
             if not client:
                 raise HTTPException(
@@ -310,14 +311,13 @@ If no relevant information is found, politely inform the user that the informati
 @app.post("/summarize")
 async def summarize_document(request: SummaryRequest):
     """Generate a short summary of a document."""
+    global client
     if request.document_id not in documents_db:
         raise HTTPException(status_code=404, detail="Document not found.")
     
     try:
         # Check if OpenAI client is available, try to reinitialize if needed
         if not client:
-            # Try to reinitialize the client
-            global client
             client = get_openai_client()
             if not client:
                 raise HTTPException(
