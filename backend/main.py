@@ -55,7 +55,24 @@ def get_openai_client() -> Optional[openai.OpenAI]:
         # Still try to use it, might be valid
     
     try:
+        # Check for proxy-related environment variables that might cause issues
+        # Remove them temporarily if they exist
+        proxy_vars = ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy', 'ALL_PROXY', 'all_proxy']
+        original_proxy_values = {}
+        for var in proxy_vars:
+            if var in os.environ:
+                original_proxy_values[var] = os.environ[var]
+                # Temporarily remove to avoid proxy issues
+                del os.environ[var]
+        
+        # Initialize client with only the API key - no proxies or other parameters
+        # This avoids the 'proxies' keyword argument error
         client_instance = openai.OpenAI(api_key=openai_api_key)
+        
+        # Restore proxy environment variables if they were set
+        for var, value in original_proxy_values.items():
+            os.environ[var] = value
+        
         print(f"✓ OpenAI client initialized successfully. API key starts with: {openai_api_key[:10]}...")
         return client_instance
     except openai.OpenAIError as e:
@@ -314,6 +331,7 @@ If no relevant information is found, politely inform the user that the informati
                     else:
                         # Try to initialize one more time to get the actual error
                         try:
+                            # Initialize without any extra parameters to avoid 'proxies' error
                             test_client = openai.OpenAI(api_key=key_value.strip())
                             error_msg = f"Client initialization succeeded but client is None. This is unexpected. Please check Railway logs."
                         except Exception as init_error:
