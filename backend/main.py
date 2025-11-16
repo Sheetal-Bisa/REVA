@@ -25,10 +25,13 @@ app.add_middleware(
 )
 
 # Initialize OpenAI client
-openai.api_key = os.environ.get("OPENAI_API_KEY")
+openai_api_key = os.environ.get("OPENAI_API_KEY")
 
-if not openai.api_key:
+if not openai_api_key:
     raise ValueError("OPENAI_API_KEY not found. Please set it in your environment variables.")
+
+# Create OpenAI client instance (v1.x API)
+client = openai.OpenAI(api_key=openai_api_key)
 
 # In-memory storage (temporary; can be replaced by DB later)
 documents_db = {}
@@ -190,7 +193,7 @@ If the answer cannot be found in the context, say so clearly. Always cite which 
 If no relevant information is found, politely inform the user that the information is not available in the uploaded documents."""
         
         # Call OpenAI API
-        response = openai.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -239,7 +242,7 @@ async def summarize_document(request: SummaryRequest):
         doc = documents_db[request.document_id]
         content = doc["content"][:8000]  # limit content length
         
-        response = openai.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {"role": "user", "content": f"Please summarize this document in 3-5 bullet points:\n\n{content}"}
