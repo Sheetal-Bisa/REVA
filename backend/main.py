@@ -27,11 +27,16 @@ app.add_middleware(
 # Initialize OpenAI client
 openai_api_key = os.environ.get("OPENAI_API_KEY")
 
-if not openai_api_key:
-    raise ValueError("OPENAI_API_KEY not found. Please set it in your environment variables.")
-
-# Create OpenAI client instance (v1.x API)
-client = openai.OpenAI(api_key=openai_api_key)
+# Create OpenAI client instance (v1.x API) - only if API key is available
+client = None
+if openai_api_key:
+    try:
+        client = openai.OpenAI(api_key=openai_api_key)
+    except Exception as e:
+        print(f"Warning: Failed to initialize OpenAI client: {e}")
+        client = None
+else:
+    print("Warning: OPENAI_API_KEY not found. OpenAI features will not work.")
 
 # In-memory storage (temporary; can be replaced by DB later)
 documents_db = {}
@@ -192,6 +197,13 @@ async def query_documents(request: QueryRequest):
 If the answer cannot be found in the context, say so clearly. Always cite which document your answer comes from.{language_instruction}
 If no relevant information is found, politely inform the user that the information is not available in the uploaded documents."""
         
+        # Check if OpenAI client is available
+        if not client:
+            raise HTTPException(
+                status_code=500, 
+                detail="OpenAI API key not configured. Please set OPENAI_API_KEY environment variable."
+            )
+        
         # Call OpenAI API
         response = client.chat.completions.create(
             model="gpt-4o",
@@ -239,6 +251,13 @@ async def summarize_document(request: SummaryRequest):
         raise HTTPException(status_code=404, detail="Document not found.")
     
     try:
+        # Check if OpenAI client is available
+        if not client:
+            raise HTTPException(
+                status_code=500, 
+                detail="OpenAI API key not configured. Please set OPENAI_API_KEY environment variable."
+            )
+        
         doc = documents_db[request.document_id]
         content = doc["content"][:8000]  # limit content length
         

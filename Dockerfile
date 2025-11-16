@@ -37,4 +37,5 @@ COPY backend/ ./backend/
 EXPOSE 8080
 
 # Start command - use PORT environment variable from Railway
-CMD sh -c "cd backend && python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1"
+# Railway sets PORT automatically
+CMD ["sh", "-c", "cd backend && python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1"]
