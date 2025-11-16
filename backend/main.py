@@ -264,12 +264,34 @@ If the answer cannot be found in the context, say so clearly. Always cite which 
 If no relevant information is found, politely inform the user that the information is not available in the uploaded documents."""
         
         # Check if OpenAI client is available, try to reinitialize if needed
+        global client
         if not client:
-            client = get_openai_client()
+            print("Client not initialized, attempting to initialize now in /query endpoint...")
+            # Force reload environment variables
+            load_dotenv(override=True)
+            
+            # Try to get the key again - check all possible sources
+            openai_api_key = (
+                os.environ.get("OPENAI_API_KEY") or
+                os.environ.get("openai_api_key") or
+                os.environ.get("OPENAI_KEY") or
+                os.environ.get("openai_key")
+            )
+            
+            if openai_api_key:
+                print(f"Found API key in /query handler, length: {len(openai_api_key)}, starts with: {openai_api_key[:10]}")
+                client = get_openai_client()
+            
             if not client:
+                # Last attempt - check all env vars and provide detailed error
+                all_vars = dict(os.environ)
+                openai_related = {k: v[:20] + "..." if len(v) > 20 else v for k, v in all_vars.items() if 'OPENAI' in k.upper() or 'API' in k.upper()}
+                print(f"Failed to initialize client. OpenAI-related env vars: {openai_related}")
+                print(f"Total env vars: {len(all_vars)}")
+                
                 raise HTTPException(
                     status_code=500, 
-                    detail="OpenAI API key not configured. Please set OPENAI_API_KEY environment variable in Railway."
+                    detail=f"OpenAI API key not found. Checked for OPENAI_API_KEY. Found {len(openai_related)} related variables: {list(openai_related.keys())}. Please verify the variable is set correctly in Railway and restart the service."
                 )
         
         # Call OpenAI API
@@ -346,8 +368,18 @@ async def summarize_document(request: SummaryRequest):
     
     try:
         # Check if OpenAI client is available, try to reinitialize if needed
+        global client
         if not client:
-            client = get_openai_client()
+            print("Client not initialized, attempting to initialize now in /summarize endpoint...")
+            load_dotenv(override=True)
+            openai_api_key = (
+                os.environ.get("OPENAI_API_KEY") or
+                os.environ.get("openai_api_key") or
+                os.environ.get("OPENAI_KEY") or
+                os.environ.get("openai_key")
+            )
+            if openai_api_key:
+                client = get_openai_client()
             if not client:
                 raise HTTPException(
                     status_code=500, 
