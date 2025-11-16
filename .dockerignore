@@ -16,3 +16,9 @@ frontend/node_modules
 frontend/build
 .railway
 
+# Make sure these are NOT ignored (explicitly included)
+!start.sh
+!Dockerfile
+!requirements.txt
+!railway.json
+

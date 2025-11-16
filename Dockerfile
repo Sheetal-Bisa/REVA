@@ -33,9 +33,12 @@ RUN npm run build
 WORKDIR /app
 COPY backend/ ./backend/
 
+# Copy start script
+COPY start.sh .
+RUN chmod +x start.sh
+
 # Expose port
 EXPOSE 8080
 
-# Start command - use PORT environment variable from Railway
-# Railway sets PORT automatically
-CMD ["sh", "-c", "cd backend && python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1"]
+# Start command - use the start script
+CMD ["./start.sh"]
