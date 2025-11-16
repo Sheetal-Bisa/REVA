@@ -30,20 +30,33 @@ client: Optional[openai.OpenAI] = None
 # Initialize OpenAI client
 def get_openai_client() -> Optional[openai.OpenAI]:
     """Get or create OpenAI client instance."""
-    openai_api_key = os.environ.get("OPENAI_API_KEY")
+    # Try multiple possible environment variable names
+    openai_api_key = (
+        os.environ.get("OPENAI_API_KEY") or
+        os.environ.get("openai_api_key") or
+        os.environ.get("OPENAI_KEY") or
+        os.environ.get("openai_key")
+    )
     
     if not openai_api_key:
         print("ERROR: OPENAI_API_KEY environment variable not found!")
+        print(f"Checking all env vars: {list(os.environ.keys())[:30]}")
         return None
     
     # Check if key is not empty
-    if not openai_api_key.strip():
-        print("ERROR: OPENAI_API_KEY is empty!")
+    openai_api_key = openai_api_key.strip()
+    if not openai_api_key:
+        print("ERROR: OPENAI_API_KEY is empty after stripping!")
         return None
     
+    # Validate key format (should start with sk-)
+    if not openai_api_key.startswith("sk-"):
+        print(f"WARNING: API key doesn't start with 'sk-'. Starts with: {openai_api_key[:5]}")
+        # Still try to use it, might be valid
+    
     try:
-        client_instance = openai.OpenAI(api_key=openai_api_key.strip())
-        print(f"OpenAI client initialized successfully. API key starts with: {openai_api_key[:10]}...")
+        client_instance = openai.OpenAI(api_key=openai_api_key)
+        print(f"✓ OpenAI client initialized successfully. API key starts with: {openai_api_key[:10]}...")
         return client_instance
     except Exception as e:
         print(f"ERROR: Failed to initialize OpenAI client: {e}")
@@ -55,15 +68,31 @@ def get_openai_client() -> Optional[openai.OpenAI]:
 async def startup_event():
     """Log startup information and initialize OpenAI client."""
     global client
-    openai_api_key = os.environ.get("OPENAI_API_KEY")
     print("=" * 50)
     print("Application Startup")
     print("=" * 50)
+    
+    # Check all environment variables
+    all_env_vars = dict(os.environ)
+    print(f"Total environment variables: {len(all_env_vars)}")
+    
+    # Look for OpenAI key in various possible names
+    openai_api_key = None
+    possible_keys = ["OPENAI_API_KEY", "openai_api_key", "OPENAI_KEY", "openai_key"]
+    
+    for key in possible_keys:
+        if key in all_env_vars:
+            openai_api_key = all_env_vars[key]
+            print(f"✓ Found API key as: {key}")
+            break
+    
     if openai_api_key:
         print(f"✓ OPENAI_API_KEY found (length: {len(openai_api_key)}, starts with: {openai_api_key[:10]}...)")
+        print(f"✓ Key value preview: {openai_api_key[:20]}...{openai_api_key[-10:]}")
     else:
         print("✗ OPENAI_API_KEY not found in environment variables")
-        print(f"Available env vars: {[k for k in os.environ.keys() if 'OPENAI' in k.upper() or 'API' in k.upper()]}")
+        print(f"Available env vars with 'OPENAI' or 'API': {[k for k in all_env_vars.keys() if 'OPENAI' in k.upper() or 'API' in k.upper()]}")
+        print(f"All env var keys (first 20): {list(all_env_vars.keys())[:20]}")
     
     # Initialize client
     client = get_openai_client()
@@ -71,7 +100,7 @@ async def startup_event():
     if client:
         print("✓ OpenAI client initialized successfully")
     else:
-        print("✗ OpenAI client not initialized")
+        print("✗ OpenAI client not initialized - will retry on first request")
     print("=" * 50)
 
 # In-memory storage (temporary; can be replaced by DB later)
@@ -392,10 +421,28 @@ async def get_analytics():
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    openai_api_key = os.environ.get("OPENAI_API_KEY")
+    global client
+    
+    # Try to get API key from multiple sources
+    openai_api_key = (
+        os.environ.get("OPENAI_API_KEY") or
+        os.environ.get("openai_api_key") or
+        os.environ.get("OPENAI_KEY") or
+        os.environ.get("openai_key")
+    )
+    
+    # Try to reinitialize client if not set
+    if not client and openai_api_key:
+        print("Attempting to reinitialize OpenAI client from /health endpoint...")
+        client = get_openai_client()
+    
     client_status = "configured" if client else "not configured"
     api_key_present = "yes" if openai_api_key else "no"
     api_key_preview = openai_api_key[:10] + "..." if openai_api_key and len(openai_api_key) > 10 else "not set"
+    
+    # Check all environment variables for debugging
+    all_env_keys = list(os.environ.keys())
+    openai_related_keys = [k for k in all_env_keys if 'OPENAI' in k.upper() or 'API' in k.upper()]
     
     return {
         "status": "healthy",
@@ -403,7 +450,10 @@ async def health_check():
         "total_queries": analytics_db["total_queries"],
         "openai_client": client_status,
         "openai_api_key_present": api_key_present,
-        "openai_api_key_preview": api_key_preview
+        "openai_api_key_preview": api_key_preview,
+        "openai_api_key_length": len(openai_api_key) if openai_api_key else 0,
+        "env_vars_with_openai_or_api": openai_related_keys,
+        "total_env_vars": len(all_env_keys)
     }
 
 
