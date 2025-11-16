@@ -90,7 +90,8 @@ function App() {
     e.preventDefault();
     if (!query.trim()) return;
 
-    const userMessage = { type: 'user', text: query, timestamp: new Date().toISOString() };
+    const queryText = query.trim(); // Save the query text before clearing
+    const userMessage = { type: 'user', text: queryText, timestamp: new Date().toISOString() };
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
     setQuery('');
@@ -98,7 +99,7 @@ function App() {
 
     try {
       const response = await axios.post(`${API_URL}/query`, {
-        query: query,
+        query: queryText,
         language: 'en',
         session_id: `session_${currentSessionId}`
       });
@@ -117,9 +118,23 @@ function App() {
       // Update chat session
       updateChatSession(currentSessionId, newMessages);
     } catch (error) {
+      console.error('Query error:', error);
+      let errorMessage = 'Query failed';
+      
+      if (error.response) {
+        // Server responded with error
+        errorMessage = error.response.data?.detail || error.response.data?.message || `Server error: ${error.response.status}`;
+      } else if (error.request) {
+        // Request made but no response
+        errorMessage = 'No response from server. Please check if the backend is running.';
+      } else {
+        // Error setting up request
+        errorMessage = error.message || 'Failed to send query';
+      }
+      
       setMessages(prev => [...prev, {
         type: 'error',
-        text: error.response?.data?.detail || 'Query failed',
+        text: errorMessage,
         timestamp: new Date().toISOString()
       }]);
     } finally {

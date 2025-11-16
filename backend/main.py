@@ -205,16 +205,33 @@ If no relevant information is found, politely inform the user that the informati
             )
         
         # Call OpenAI API
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {request.query}"}
-            ],
-            temperature=0.7
-        )
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {request.query}"}
+                ],
+                temperature=0.7
+            )
+            
+            response_text = response.choices[0].message.content
+        except openai.AuthenticationError as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"OpenAI authentication failed: {str(e)}. Please check your API key."
+            )
+        except openai.APIError as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"OpenAI API error: {str(e)}"
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error calling OpenAI API: {str(e)}"
+            )
         
-        response_text = response.choices[0].message.content
         sources = list(set([chunk["doc_name"] for chunk in relevant_chunks]))
         
         # Response time
@@ -240,8 +257,16 @@ If no relevant information is found, politely inform the user that the informati
             response_time=response_time
         )
         
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Catch any other unexpected errors
+        import traceback
+        error_details = str(e)
+        print(f"Unexpected error in query endpoint: {error_details}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {error_details}")
 
 
 @app.post("/summarize")
@@ -261,21 +286,43 @@ async def summarize_document(request: SummaryRequest):
         doc = documents_db[request.document_id]
         content = doc["content"][:8000]  # limit content length
         
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "user", "content": f"Please summarize this document in 3-5 bullet points:\n\n{content}"}
-            ],
-            max_tokens=1000
-        )
-        
-        summary = response.choices[0].message.content
-        documents_db[request.document_id]["summary"] = summary
-        
-        return {"success": True, "summary": summary}
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "user", "content": f"Please summarize this document in 3-5 bullet points:\n\n{content}"}
+                ],
+                max_tokens=1000
+            )
+            
+            summary = response.choices[0].message.content
+            documents_db[request.document_id]["summary"] = summary
+            
+            return {"success": True, "summary": summary}
+        except openai.AuthenticationError as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"OpenAI authentication failed: {str(e)}. Please check your API key."
+            )
+        except openai.APIError as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"OpenAI API error: {str(e)}"
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error calling OpenAI API: {str(e)}"
+            )
     
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        error_details = str(e)
+        print(f"Unexpected error in summarize endpoint: {error_details}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {error_details}")
 
 
 @app.get("/documents")
